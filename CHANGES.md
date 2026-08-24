@@ -65,10 +65,31 @@ corrupts the scan cycle so nothing ever gets decoded), and no way to disable sca
   - Steady **green** — on, ready to scan
   - Steady **red** — off (short presses are ignored while off)
   - Pulsing **blue** — actively scanning (during the 3s window)
-  - Brief **white flash** — a barcode was just successfully decoded
+  - Brief **white flash** — a barcode was just successfully decoded (new, valid code)
+  - Brief **yellow flash** — valid code, but it's the same one just read last time (repeat)
+  - Brief **orange flash** — something was read, but it failed EAN validation (see below)
+
+## New: EAN-5/8/13 validation (AtomS3 YAML)
+
+The scanner occasionally reads partial/corrupted codes (a byte or two dropped over
+UART), which previously got treated as real barcode data since the old filter only
+checked for a handful of known noise strings and a minimum length of 3 characters.
+
+The `uart_readline` text sensor's filter now validates that every read is a
+structurally correct EAN code before accepting it:
+- All-digit, and exactly 5, 8, or 13 characters long (EAN-5, EAN-8, EAN-13)
+- For EAN-8/EAN-13: the final digit must match the GS1 modulo-10 check digit computed
+  from the rest (EAN-5 add-on codes carry no standard check digit, so length is the
+  only structural check available for those)
+
+This replaces the old ad-hoc noise-string exclusion list entirely — any protocol echo
+or truncated read fails one of these checks and gets dropped, so nothing else needs to
+special-case it. The check/flash logic lives together in one filter lambda so there's
+never a risk of two conflicting flashes for the same read.
 
 ## Data quality note
 
 The scanner module occasionally echoes its own stop-decode command byte back over UART
-(`0x75`, i.e. the ASCII character `u`). The existing filter lambda in `text_sensor.py`
-already strips this — if you extend the filter list, keep that case in mind.
+(`0x75`, i.e. the ASCII character `u`). The EAN validation above rejects this
+automatically now (it's neither all-digit nor a valid length), so no separate handling
+is needed.

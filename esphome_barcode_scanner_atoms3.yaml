@@ -11,6 +11,10 @@ globals:
     type: bool
     restore_value: false
     initial_value: 'false'
+  - id: last_barcode
+    type: std::string
+    restore_value: false
+    initial_value: '""'
 
 esphome:
   name: atom-qrcode-scanner
@@ -179,7 +183,12 @@ script:
           }
           call.perform();
 
-# Text sensor with simple filtering
+# Text sensor: only accept structurally valid EAN-5 / EAN-8 / EAN-13 codes.
+# This replaces the old ad-hoc noise-string exclusion list entirely -- any
+# protocol echo, partial/truncated read, or other garbage byte sequence from
+# the scanner will simply fail these checks (wrong length, non-digit
+# characters, or a bad check digit) and get dropped, so nothing else needed
+# to special-case it.
 text_sensor:
   - platform: uart_readline
     uart_id: uart_bus
@@ -187,36 +196,71 @@ text_sensor:
     id: barcode_scanner
     icon: "mdi:barcode-scan"
     filters:
-      # Simple filter to remove unwanted single characters
+      # Validates EAN-5/8/13 structure AND flashes the result color, all in
+      # one place, so there's exactly one flash decision per raw UART line
+      # instead of risking a second, conflicting flash from on_value.
+      #   orange = read something, but it failed validation (garbage/partial read)
+      #   yellow = valid code, but the same one just read last time (repeat)
+      #   white  = valid, new code (ok)
       - lambda: |-
-          // Ignore single 'u' from stop command
-          if (x == "u" || x == "u\x02" || x == "u\x02\x00" || x == "u\x02\x00\x00") {
+          size_t len = x.length();
+          bool valid = true;
+
+          // Must be all ASCII digits
+          for (char c : x) {
+            if (c < '0' || c > '9') {
+              valid = false;
+              break;
+            }
+          }
+
+          // Must be exactly EAN-5, EAN-8, or EAN-13 length
+          if (valid && len != 5 && len != 8 && len != 13) {
+            valid = false;
+          }
+
+          // EAN-8 / EAN-13: validate the GS1 modulo-10 check digit.
+          // EAN-5 add-on codes carry no standard check digit, so length is
+          // the only structural check available for them.
+          if (valid && (len == 8 || len == 13)) {
+            int sum = 0;
+            bool weight_three = true;
+            for (int i = (int) len - 2; i >= 0; i--) {
+              int digit = x[i] - '0';
+              sum += digit * (weight_three ? 3 : 1);
+              weight_three = !weight_three;
+            }
+            int expected_check = (10 - (sum % 10)) % 10;
+            int actual_check = x[len - 1] - '0';
+            if (expected_check != actual_check) {
+              valid = false;
+            }
+          }
+
+          auto call = id(led_indicator).turn_on();
+          call.set_effect("None");
+
+          if (!valid) {
+            call.set_rgb(1.0f, 0.5f, 0.0f);  // orange: invalid/rejected
+            call.perform();
             return {};
           }
-          // Ignore initialization echoes
-          if (x == "B@" || x == "aA" || x == "vB" || x == "cF" || x == "@" || x == "A" || x == "B" || x == "F") {
-            return {};
+
+          if (x == id(last_barcode)) {
+            call.set_rgb(1.0f, 1.0f, 0.0f);  // yellow: repeat of last code
+            call.perform();
+          } else {
+            id(last_barcode) = x;
+            call.set_rgb(1.0f, 1.0f, 1.0f);  // white: new, valid (ok)
+            call.perform();
           }
-          // Ignore protocol responses that start with these bytes
-          if (x.length() > 0 && (x[0] == '"' || x[0] == '$' || x[0] == '3' || x[0] == 'D')) {
-            return {};
-          }
-          // Only accept strings with at least 3 characters (real barcodes)
-          if (x.length() < 3) {
-            return {};
-          }
+
           return x;
     on_value:
       then:
         - logger.log:
             format: "Barcode scanned: %s"
             args: ['x.c_str()']
-        - light.turn_on:
-            id: led_indicator
-            effect: "None"
-            red: 100%
-            green: 100%
-            blue: 100%
         - delay: 500ms
         - script.execute: update_led
 
