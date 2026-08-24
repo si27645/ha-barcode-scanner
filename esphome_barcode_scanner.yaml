@@ -1,3 +1,6 @@
+substitutions:
+  device_name: "atom-qrcode-scanner"
+
 esphome:
   name: atom-qrcode-scanner
   on_boot:

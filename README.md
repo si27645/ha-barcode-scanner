@@ -1,6 +1,16 @@
 ## Home Assistant Barcode Scanner
 ESPHome based barcode scanner for Home Assistant. No soldering or 3D printing required! Just put together, adopt in ESPHome builder using the provided .yaml file. Do not forget to also upload the custom component to esphome folder in your config/.
 
+> **This fork** adds M5Stack **AtomS3 / AtomS3 Lite** (ESP32-S3) support alongside the original classic Atom Lite (ESP32), fixes a few bugs in the upstream `uart_readline` component, and adds on/off + manual-trigger button behavior with RGB status colors. See [CHANGES.md](CHANGES.md) for details.
+
+### Quick start
+
+1. Copy `secrets.yaml.example` to `secrets.yaml` and fill in your Wi-Fi credentials.
+2. Copy `esphome/custom_components/` into your ESPHome config folder (alongside the `.yaml` file), and copy `esphome_barcode_scanner.yaml` there too — or import it via the ESPHome Dashboard.
+3. **If you have the classic Atom Lite (ESP32):** use `esphome_barcode_scanner.yaml` as-is.
+   **If you have an AtomS3 / AtomS3 Lite (ESP32-S3):** use `esphome_barcode_scanner_atoms3.yaml` instead — pin numbers, board type, and the LED driver differ between the two chips.
+4. Flash via `esphome run <file>.yaml` (first flash needs USB; later updates are OTA).
+
 ## Components
 
 ### Atom Lite

@@ -8,9 +8,7 @@ DEPENDENCIES = ['uart']
 uart_readline_ns = cg.esphome_ns.namespace('uart_readline')
 UartReadlineTextSensor = uart_readline_ns.class_('UartReadlineTextSensor', text_sensor.TextSensor, uart.UARTDevice, cg.Component)
 
-CONFIG_SCHEMA = text_sensor.TEXT_SENSOR_SCHEMA.extend({
-    cv.GenerateID(): cv.declare_id(UartReadlineTextSensor),
-}).extend(uart.UART_DEVICE_SCHEMA).extend(cv.COMPONENT_SCHEMA)
+CONFIG_SCHEMA = text_sensor.text_sensor_schema(UartReadlineTextSensor).extend(uart.UART_DEVICE_SCHEMA).extend(cv.COMPONENT_SCHEMA)
 
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
